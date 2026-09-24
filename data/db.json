@@ -1237,7 +1237,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0002",
@@ -1246,7 +1247,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0003",
@@ -1255,7 +1257,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0004",
@@ -1264,7 +1267,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0005",
@@ -1273,7 +1277,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0006",
@@ -1282,7 +1287,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0007",
@@ -1291,7 +1297,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0008",
@@ -1300,7 +1307,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0009",
@@ -1309,7 +1317,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0010",
@@ -1318,7 +1327,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0011",
@@ -1327,7 +1337,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0012",
@@ -1336,7 +1347,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0013",
@@ -1345,7 +1357,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0014",
@@ -1354,7 +1367,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0015",
@@ -1363,7 +1377,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": ""
     },
     {
       "id": "out-0016",
@@ -1372,7 +1387,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0017",
@@ -1381,7 +1397,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0018",
@@ -1390,7 +1407,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0019",
@@ -1399,7 +1417,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0020",
@@ -1408,7 +1427,8 @@
       "flow": 52,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0021",
@@ -1417,7 +1437,8 @@
       "flow": 96,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0022",
@@ -1543,7 +1564,8 @@
       "flow": 60,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0036",
@@ -1552,7 +1574,8 @@
       "flow": 60,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0037",
@@ -1561,7 +1584,8 @@
       "flow": 60,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0038",
@@ -1570,7 +1594,8 @@
       "flow": 60,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0039",
@@ -1579,7 +1604,8 @@
       "flow": 60,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0040",
@@ -1588,7 +1614,8 @@
       "flow": 60,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0041",
@@ -1597,7 +1624,8 @@
       "flow": 60,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0001"
     },
     {
       "id": "out-0042",
@@ -1615,7 +1643,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0044",
@@ -1624,7 +1653,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0045",
@@ -1633,7 +1663,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0046",
@@ -1642,7 +1673,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0047",
@@ -1651,7 +1683,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0048",
@@ -1660,7 +1693,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0049",
@@ -1669,7 +1703,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0050",
@@ -1678,7 +1713,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0051",
@@ -1687,7 +1723,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0052",
@@ -1696,7 +1733,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0053",
@@ -1705,7 +1743,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0054",
@@ -1714,7 +1753,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0055",
@@ -1723,7 +1763,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0056",
@@ -1732,7 +1773,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     },
     {
       "id": "out-0057",
@@ -1741,7 +1783,8 @@
       "flow": 38,
       "type": "发电",
       "operator": "值班员",
-      "remark": ""
+      "remark": "",
+      "waterUserId": "usr-0003"
     }
   ],
   "orders": [
@@ -1818,6 +1861,128 @@
           "at": "2026-05-05"
         }
       ]
+    }
+  ],
+  "waterUsers": [
+    {
+      "id": "usr-0001",
+      "code": "YH001",
+      "name": "青江灌区东干渠",
+      "contact": "王渠首",
+      "phone": "",
+      "reach": "青岭水库下游东干渠",
+      "status": "正常",
+      "remark": "镇水利站统管"
+    },
+    {
+      "id": "usr-0002",
+      "code": "YH002",
+      "name": "青江镇自来水厂",
+      "contact": "李厂长",
+      "phone": "",
+      "reach": "青岭水库放水洞",
+      "status": "正常",
+      "remark": "生活用水优先"
+    },
+    {
+      "id": "usr-0003",
+      "code": "YH003",
+      "name": "白河村灌溉用水户",
+      "contact": "赵村长",
+      "phone": "",
+      "reach": "白河水库下游",
+      "status": "正常",
+      "remark": ""
+    },
+    {
+      "id": "usr-0004",
+      "code": "YH004",
+      "name": "河滩生态补水段",
+      "contact": "河道科",
+      "phone": "",
+      "reach": "青江主河道",
+      "status": "停用",
+      "remark": "今年暂未申请"
+    }
+  ],
+  "plans": [
+    {
+      "id": "plan-0001",
+      "waterUserId": "usr-0001",
+      "reservoirId": "res-0001",
+      "startDate": "2026-05-01",
+      "endDate": "2026-05-10",
+      "demandWan": 5000,
+      "purpose": "春灌",
+      "reporter": "王渠首",
+      "reportedAt": "2026-04-28",
+      "status": "已报送",
+      "remark": "纸质计划转登"
+    },
+    {
+      "id": "plan-0002",
+      "waterUserId": "usr-0001",
+      "reservoirId": "res-0001",
+      "startDate": "2026-05-11",
+      "endDate": "2026-05-20",
+      "demandWan": 4500,
+      "purpose": "春灌续灌",
+      "reporter": "王渠首",
+      "reportedAt": "2026-05-09",
+      "status": "已报送",
+      "remark": ""
+    },
+    {
+      "id": "plan-0003",
+      "waterUserId": "usr-0002",
+      "reservoirId": "res-0001",
+      "startDate": "2026-05-01",
+      "endDate": "2026-05-10",
+      "demandWan": 300,
+      "purpose": "生活供水",
+      "reporter": "李厂长",
+      "reportedAt": "2026-04-27",
+      "status": "已报送",
+      "remark": "按合同水量报送"
+    },
+    {
+      "id": "plan-0004",
+      "waterUserId": "usr-0001",
+      "reservoirId": "res-0001",
+      "startDate": "2026-09-12",
+      "endDate": "2026-09-18",
+      "demandWan": 4000,
+      "purpose": "秋浇",
+      "reporter": "王渠首",
+      "reportedAt": "2026-09-10",
+      "status": "已报送",
+      "remark": ""
+    },
+    {
+      "id": "plan-0005",
+      "waterUserId": "usr-0003",
+      "reservoirId": "res-0002",
+      "startDate": "2026-05-01",
+      "endDate": "2026-05-10",
+      "demandWan": 3000,
+      "purpose": "插秧泡田",
+      "reporter": "赵村长",
+      "reportedAt": "2026-04-29",
+      "status": "已报送",
+      "remark": ""
+    },
+    {
+      "id": "plan-0006",
+      "waterUserId": "usr-0003",
+      "reservoirId": "res-0002",
+      "startDate": "2026-05-11",
+      "endDate": "2026-05-15",
+      "demandWan": 2000,
+      "purpose": "保苗水",
+      "reporter": "赵村长",
+      "reportedAt": "2026-05-08",
+      "status": "已报送",
+      "remark": ""
     }
   ]
 }

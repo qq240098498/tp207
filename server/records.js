@@ -75,8 +75,10 @@ function listFlows(data, kind, query) {
   return rows
     .map((r) => {
       const reservoir = data.reservoirs.find((x) => x.id === r.reservoirId);
+      const user = data.waterUsers ? data.waterUsers.find((u) => u.id === r.waterUserId) : null;
       return Object.assign({}, r, {
         reservoirName: reservoir ? reservoir.name : '',
+        waterUserName: user ? user.name : '',
         volumeWan: store.round((Number(r.flow) * 86400) / 10000, 3),
       });
     })
@@ -99,6 +101,7 @@ function saveFlow(data, kind, payload) {
     operator: String(payload.operator || '').trim(),
     remark: String(payload.remark || ''),
   };
+  if (kind === 'release') attachWaterUser(payload, record, data);
   list.push(record);
   return record;
 }
@@ -110,6 +113,47 @@ function removeFlow(data, kind, id) {
   if (kind === 'inflow') data.inflows = data.inflows.filter((r) => r.id !== id);
   else data.releases = data.releases.filter((r) => r.id !== id);
   return { removed: id };
+}
+
+// 把一条出库记录认领到用水户（或取消认领）。认领只挂名，不改流量；
+// 日期若不在该户任一有效计划窗口内，照样允许（算“计划外出水”），但在返回里点名。
+function assignRelease(data, id, payload) {
+  const plans = require('./plans');
+  const record = data.releases.find((r) => r.id === id);
+  if (!record) throw new AppError(404, 'FLOW_NOT_FOUND', '这条出库记录不存在');
+  const rawUserId = payload && payload.waterUserId !== undefined ? String(payload.waterUserId || '').trim() : '';
+  if (rawUserId && !data.waterUsers.some((u) => u.id === rawUserId)) {
+    throw new AppError(400, 'VALIDATION_FAILED', '这个用水户不存在', { waterUserId: '用水户不存在' });
+  }
+  return plans.withImpact(data, () => {
+    record.waterUserId = rawUserId;
+    const reservoir = data.reservoirs.find((x) => x.id === record.reservoirId);
+    const user = rawUserId ? data.waterUsers.find((u) => u.id === rawUserId) : null;
+    const covering = rawUserId ? data.plans.filter(
+      (p) => p.status !== '已撤销'
+        && p.waterUserId === rawUserId
+        && p.reservoirId === record.reservoirId
+        && record.date >= p.startDate && record.date <= p.endDate
+    ) : [];
+    return Object.assign({}, record, {
+      reservoirName: reservoir ? reservoir.name : '',
+      waterUserName: user ? user.name : '',
+      volumeWan: store.round((Number(record.flow) * 86400) / 10000, 3),
+      outsidePlan: rawUserId ? covering.length === 0 : false,
+      coveringPlans: covering.map((p) => ({ planId: p.id, startDate: p.startDate, endDate: p.endDate, purpose: p.purpose || '' })),
+    });
+  });
+}
+
+// 登记出库时可顺便挂用水户
+function attachWaterUser(payload, record, data) {
+  const userId = payload && payload.waterUserId !== undefined ? String(payload.waterUserId || '').trim() : '';
+  if (userId) {
+    if (!data.waterUsers.some((u) => u.id === userId)) {
+      throw new AppError(400, 'VALIDATION_FAILED', '这个用水户不存在', { waterUserId: '用水户不存在' });
+    }
+    record.waterUserId = userId;
+  }
 }
 
 // 调度指令
@@ -259,6 +303,7 @@ module.exports = {
   listFlows,
   saveFlow,
   removeFlow,
+  assignRelease,
   listOrders,
   findOrder,
   createOrder,

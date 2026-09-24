@@ -401,6 +401,23 @@ code {
 .caliber li { margin-bottom: 4px; }
 .caliber b { color: var(--ink); }
 
+/* ---------- 需水满足度 ---------- */
+.metric-card.is-static { cursor: default; }
+.sat-subhead {
+  margin: 10px 0 6px;
+  font-size: 12px;
+  color: var(--indigo-deep);
+  border-left: 3px solid var(--indigo);
+  padding-left: 6px;
+}
+.rank-num { font-weight: 700; color: var(--indigo-deep); }
+.gap-short { color: var(--orange); font-weight: 700; font-variant-numeric: tabular-nums; }
+.gap-over { color: var(--green); font-variant-numeric: tabular-nums; }
+.assign-sel { min-width: 150px; font-family: inherit; font-size: 12px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+.table tr.is-revoked td { color: var(--ink-soft); text-decoration: line-through; }
+.table tr.sat-row { cursor: pointer; }
+.inline-form .assign-sel { margin: 0; }
+
 /* ---------- 弹层 ---------- */
 .modal-mask {
   display: flex;

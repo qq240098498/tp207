@@ -5,6 +5,8 @@ const reservoirs = require('./reservoirs');
 const records = require('./records');
 const water = require('./water');
 const summary = require('./summary');
+const plans = require('./plans');
+const satisfaction = require('./satisfaction');
 
 const router = express.Router();
 
@@ -84,6 +86,44 @@ router.get('/curve/query', withData((data, req) => {
     out.levelByCurve = water.levelAt(curve, capacity);
   }
   return out;
+}));
+
+/* ---------- 用水户与需水满足度 ---------- */
+
+router.get('/water-users', withData((data, req) => plans.listUsers(data, req.query)));
+router.post('/water-users', withData((data, req) => ({ __save: true, __body: plans.createUser(data, req.body || {}) })));
+router.patch('/water-users/:id', withData((data, req) => ({ __save: true, __body: plans.updateUser(data, req.params.id, req.body || {}) })));
+router.delete('/water-users/:id', withData((data, req) => ({ __save: true, __body: plans.removeUser(data, req.params.id) })));
+
+router.get('/plans', withData((data, req) => plans.listPlans(data, req.query)));
+router.post('/plans', withData((data, req) => {
+  const out = plans.createPlan(data, req.body || {});
+  return { __save: true, __body: out };
+}));
+router.patch('/plans/:id', withData((data, req) => {
+  const out = plans.updatePlan(data, req.params.id, req.body || {});
+  return { __save: true, __body: out };
+}));
+router.delete('/plans/:id', withData((data, req) => {
+  const out = plans.removePlan(data, req.params.id);
+  return { __save: true, __body: out };
+}));
+
+// 满足度报表：同一份数据当场连算两遍，结果不一致直接 500，不把半信半疑的数字给出去
+router.get('/satisfaction', withData((data, req) => {
+  const first = satisfaction.computeSatisfaction(data, req.query);
+  const second = satisfaction.computeSatisfaction(data, req.query);
+  if (JSON.stringify(first) !== JSON.stringify(second)) {
+    throw new AppError(500, 'SATISFACTION_NONDETERMINISTIC', '满足度连算两遍结果不一致，本次结果不予返回，请检查口径');
+  }
+  first.determinism = { repeated: true, consistent: true };
+  return first;
+}));
+
+// 出库记录认领到用水户（waterUserId 传空串即取消认领）
+router.patch('/flows/release/:id/assign', withData((data, req) => {
+  const out = records.assignRelease(data, req.params.id, req.body || {});
+  return { __save: true, __body: out };
 }));
 
 router.use((req, res, next) => {

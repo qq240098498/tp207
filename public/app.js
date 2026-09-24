@@ -6,9 +6,10 @@
 
   /* ================= 常量与工具 ================= */
 
-  var VIEW_IDS = ['overview', 'reservoirs', 'water', 'orders', 'balance'];
+  var VIEW_IDS = ['overview', 'reservoirs', 'water', 'orders', 'balance', 'satisfaction'];
   var ORDER_STATUSES = ['已下达', '执行中', '已完成', '已撤销'];
   var RESERVOIR_STATUSES = ['运行', '检修'];
+  var SAT_KINDS = ['report', 'plans', 'users'];
 
   function el(id) { return document.getElementById(id); }
   function qs(sel, root) { return (root || document).querySelector(sel); }
@@ -121,6 +122,7 @@
   var state = {
     view: 'overview',
     waterKind: 'level',
+    satKind: 'report',
     settings: null,
     summary: null,
     reservoirs: [],
@@ -128,7 +130,11 @@
     flows: { inflow: [], release: [] },
     orders: [],
     balance: null,
-    expanded: { reservoir: '', level: '', flow: '', order: '' },
+    waterUsers: [],
+    satisfaction: null,
+    planList: [],
+    lastImpact: null,
+    expanded: { reservoir: '', level: '', flow: '', order: '', satPlan: '' },
     reservoirDetail: null,
     curveDraft: null,
     curveQuery: { reservoirId: '', byLevel: null, byCapacity: null },
@@ -137,7 +143,8 @@
       reservoirs: { basin: '', status: '', keyword: '' },
       water: { reservoirId: '', from: '', to: '' },
       orders: { reservoirId: '', status: '' },
-      balance: { reservoirId: '', from: '2026-05-01', to: '2026-05-10' }
+      balance: { reservoirId: '', from: '2026-05-01', to: '2026-05-10' },
+      satisfaction: { reservoirId: '', waterUserId: '', from: '', to: '' }
     }
   };
 
@@ -245,6 +252,8 @@
         renderOrders();
       } else if (view === 'balance') {
         renderBalance();
+      } else if (view === 'satisfaction') {
+        await reloadSatisfaction();
       }
     } catch (err) {
       showError(err);
@@ -372,6 +381,23 @@
       html.push('<li>每天损失 ' + esc(dash(state.settings ? state.settings.lossPerDayWan : '')) + ' 万m³</li>');
       html.push('<li>容差 ' + esc(dash(state.settings ? state.settings.balanceToleranceWan : '')) + ' 万m³</li>');
       html.push('<li>汛期 ' + esc(dash(state.settings ? state.settings.floodSeasonStart + ' 至 ' + state.settings.floodSeasonEnd : '')) + '</li>');
+      html.push('</ul></div>');
+    } else if (view === 'satisfaction') {
+      html.push('<div class="side-block">');
+      html.push('<h3>筛选对账范围</h3>');
+      html.push('<label class="field"><span>水库</span><select data-filter-key="reservoirId" data-filter-scope="satisfaction">' + reservoirOptions(f.reservoirId) + '</select></label>');
+      html.push('<label class="field"><span>用水户</span><select data-filter-key="waterUserId" data-filter-scope="satisfaction">' + optionsHtml((state.waterUsers || []).map(function (u) {
+        return { value: u.id, label: u.code + ' ' + u.name };
+      }), f.waterUserId, '全部用水户') + '</select></label>');
+      html.push('<label class="field"><span>起始日期</span><input type="date" data-filter-key="from" data-filter-scope="satisfaction" value="' + esc(f.from || '') + '" /></label>');
+      html.push('<label class="field"><span>结束日期</span><input type="date" data-filter-key="to" data-filter-scope="satisfaction" value="' + esc(f.to || '') + '" /></label>');
+      html.push('<button type="button" class="btn btn-ghost btn-sm" data-action="reset-filter" data-scope="satisfaction">重置筛选</button>');
+      html.push('</div>');
+      html.push('<div class="side-block"><h3>口径</h3><ul class="side-list">');
+      html.push('<li>实际供水只算同户、同库、时段内的挂名出库</li>');
+      html.push('<li>流量按 86400 秒/天折万m³</li>');
+      html.push('<li>名次按全部计划全局排，筛选不改名次</li>');
+      html.push('<li>计划一保存，率与名次立即重算</li>');
       html.push('</ul></div>');
     }
 
@@ -610,6 +636,11 @@
       if (pair[0] === kind) panel.removeAttribute('hidden');
       else panel.setAttribute('hidden', '');
     });
+    var releaseUserField = el('releaseUserField');
+    if (releaseUserField) {
+      if (kind === 'release') releaseUserField.removeAttribute('hidden');
+      else releaseUserField.setAttribute('hidden', '');
+    }
   }
 
   async function loadWaterRecords() {
@@ -691,6 +722,7 @@
           ['类型（入库/出库）', kind === 'inflow' ? '入库' : '出库'],
           ['数据类别', row.type],
           ['记录人', row.operator],
+          ['已挂用水户', kind === 'release' ? (row.waterUserName || '未挂用水户') : '—'],
           ['流量（接口）', row.flow],
           ['对应水量（接口）', row.volumeWan],
           ['备注', row.remark]
@@ -827,6 +859,508 @@
       + '</ul>';
   }
 
+  /* ================= 需水满足度 ================= */
+
+  function setSatKind(kind) {
+    if (SAT_KINDS.indexOf(kind) < 0) return;
+    state.satKind = kind;
+    qsa('#satisfactionSubtabs .subtab').forEach(function (btn) {
+      btn.classList.toggle('is-active', btn.dataset.kind === kind);
+    });
+    [['report', 'satReportPanel'], ['plans', 'satPlansPanel'], ['users', 'satUsersPanel']].forEach(function (pair) {
+      var panel = el(pair[1]);
+      if (!panel) return;
+      if (pair[0] === kind) panel.removeAttribute('hidden');
+      else panel.setAttribute('hidden', '');
+    });
+  }
+
+  function satQuery() {
+    var f = state.filters.satisfaction;
+    return queryString({ reservoirId: f.reservoirId, waterUserId: f.waterUserId, from: f.from, to: f.to });
+  }
+
+  async function reloadSatisfaction() {
+    var f = state.filters.satisfaction;
+    var q = queryString({
+      reservoirId: f.reservoirId, waterUserId: f.waterUserId, from: f.from, to: f.to, includeRevoked: 1
+    });
+    state.satisfaction = await api('GET', '/api/satisfaction' + satQuery());
+    state.planList = await api('GET', '/api/plans' + q);
+    state.waterUsers = await api('GET', '/api/water-users');
+    fillSatisfactionSelects();
+    renderSatisfaction();
+    renderPlans();
+    renderUsers();
+  }
+
+  function fillSatisfactionSelects() {
+    var userList = state.waterUsers || [];
+    var userOpts = function (current) {
+      return optionsHtml(userList.map(function (u) {
+        return { value: u.id, label: u.code + ' ' + u.name };
+      }), current, '请选择用水户');
+    };
+    var planUser = el('planFormUser');
+    if (planUser) planUser.innerHTML = userOpts(planUser.value);
+    qsa('[data-role="assign-user"]').forEach(function (sel) {
+      var cur = sel.value;
+      sel.innerHTML = '<option value="">认领到…</option>' + userList.map(function (u) {
+        return '<option value="' + esc(u.id) + '">' + esc(u.code + ' ' + u.name) + '</option>';
+      }).join('');
+      sel.value = cur || '';
+    });
+  }
+
+  function rateTag(rate) {
+    if (rate === null || rate === undefined) return '<span class="tag">—</span>';
+    var cls = 'tag';
+    if (rate < 80) cls = 'tag is-serious';
+    else if (rate < 100) cls = 'tag is-warn';
+    else cls = 'tag is-ok';
+    return '<span class="' + cls + '">' + esc(rate) + '%</span>';
+  }
+
+  function gapText(gap) {
+    if (gap === null || gap === undefined) return '—';
+    if (gap > 0) return '<span class="gap-short">' + esc(numText(gap)) + '</span>';
+    if (gap < 0) return '<span class="gap-over">' + esc(numText(gap)) + '</span>';
+    return '0';
+  }
+
+  function showImpact(impact) {
+    state.lastImpact = impact || null;
+    var card = el('satImpactCard');
+    var box = el('satImpactMessages');
+    if (!impact || !impact.planChangeCount) {
+      card.setAttribute('hidden', '');
+      box.innerHTML = '';
+      return;
+    }
+    box.innerHTML = (impact.messages || []).map(function (m) {
+      return '<li>' + esc(m) + '</li>';
+    }).join('');
+    card.removeAttribute('hidden');
+  }
+
+  function renderSatisfaction() {
+    var s = state.satisfaction;
+    if (!s) return;
+
+    var t = s.totals;
+    function satCard(label, value, foot, accent) {
+      return '<div class="metric-card is-static' + (accent ? ' is-accent' : '') + '">'
+        + '<span class="metric-label">' + esc(label) + '</span>'
+        + '<span class="metric-value">' + esc(value) + '</span>'
+        + '<span class="metric-foot">' + esc(foot) + '</span></div>';
+    }
+    el('satCards').innerHTML = [
+      satCard('计划时段数', t.planCount, '当前筛选范围内', false),
+      satCard('需水合计（万m³）', numText(t.demandWan), '所有计划报量合计', false),
+      satCard('实际供水（万m³）', numText(t.actualWan), '已挂名且落在时段内的出库', false),
+      satCard('总满足率', (t.satisfactionRate === null ? '—' : t.satisfactionRate + '%'), '实际 ÷ 需水', t.satisfactionRate !== null && t.satisfactionRate < 100),
+      satCard('未供够时段数', t.unmetPlanCount, '满足率低于 100% 的时段', true),
+      satCard('未认领出库', s.reconciliation.unclaimedCount, numText(s.reconciliation.unclaimedWan) + ' 万m³ 没挂用水户', true)
+    ].join('');
+
+    // 用水户级优先顺序（跨时段合计）
+    var uRankBody = el('satUserRankRows');
+    if (!s.userRanking.length) {
+      uRankBody.innerHTML = emptyRow(8, '还没有用水户或计划。');
+    } else {
+      uRankBody.innerHTML = s.userRanking.map(function (u) {
+        return '<tr>'
+          + '<td class="num rank-num">' + esc(u.rank) + '</td>'
+          + '<td>' + esc(u.waterUserCode + ' ' + u.waterUserName) + '</td>'
+          + '<td class="num">' + esc(u.planCount) + '</td>'
+          + '<td class="num">' + esc(numText(u.demandWan)) + '</td>'
+          + '<td class="num">' + esc(numText(u.actualWan)) + '</td>'
+          + '<td class="num">' + gapText(u.gapWan) + '</td>'
+          + '<td class="num">' + rateTag(u.satisfactionRate) + '</td>'
+          + '<td class="num">' + esc(u.satisfiedPlanCount) + ' / ' + esc(u.planCount) + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    // 优先排名表（已按满足率从低到高排好）
+    var rankBody = el('satRankingRows');
+    if (!s.ranking.length) {
+      rankBody.innerHTML = emptyRow(10, '当前范围内没有有效计划。');
+    } else {
+      rankBody.innerHTML = s.ranking.map(function (r) {
+        return '<tr data-action="toggle-sat-plan" data-id="' + esc(r.planId) + '">'
+          + '<td class="num rank-num">' + esc(r.rank) + '</td>'
+          + '<td>' + esc(r.waterUserName) + '</td>'
+          + '<td>' + esc(r.reservoirName) + '</td>'
+          + '<td>' + esc(r.startDate) + ' 至 ' + esc(r.endDate) + '</td>'
+          + '<td>' + esc(r.purpose) + '</td>'
+          + '<td class="num">' + esc(numText(r.demandWan)) + '</td>'
+          + '<td class="num">' + esc(numText(r.actualWan)) + '</td>'
+          + '<td class="num">' + gapText(r.gapWan) + '</td>'
+          + '<td class="num">' + rateTag(r.satisfactionRate) + '</td>'
+          + '<td>' + esc(dash(r.reporter)) + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    // 并排主表（按时段顺序，带名次），点行展开逐日台账
+    var body = el('satRows');
+    var colspan = columnCount('satRows');
+    if (!s.rows.length) {
+      body.innerHTML = emptyRow(colspan, '当前范围内没有有效计划。');
+    } else {
+      var html = [];
+      s.rows.forEach(function (r) {
+        var expanded = state.expanded.satPlan === r.planId;
+        html.push('<tr class="sat-row' + (expanded ? ' is-expanded' : '') + '" data-action="toggle-sat-plan" data-id="' + esc(r.planId) + '">'
+          + '<td class="num rank-num">' + esc(r.rank) + '</td>'
+          + '<td>' + esc(r.waterUserName) + '</td>'
+          + '<td>' + esc(r.reservoirName) + '</td>'
+          + '<td>' + esc(r.startDate) + '</td>'
+          + '<td>' + esc(r.endDate) + '</td>'
+          + '<td class="num">' + esc(r.days) + '</td>'
+          + '<td>' + esc(r.purpose) + '</td>'
+          + '<td class="num">' + esc(numText(r.demandWan)) + '</td>'
+          + '<td class="num">' + esc(numText(r.actualWan)) + '</td>'
+          + '<td class="num">' + gapText(r.gapWan) + '</td>'
+          + '<td class="num">' + rateTag(r.satisfactionRate) + '</td>'
+          + '<td class="num">' + esc(r.releaseCount) + '</td>'
+          + '<td>' + esc(dash(r.reporter)) + '</td>'
+          + '</tr>');
+        if (expanded) html.push(satPlanDetailHtml(r, colspan));
+      });
+      body.innerHTML = html.join('');
+    }
+
+    renderUnmatched(s);
+    renderReconcile(s);
+  }
+
+  function satPlanDetailHtml(r, colspan) {
+    var releaseRows = (r.releases || []).map(function (x) {
+      return '<tr><td>' + esc(x.id) + '</td><td>' + esc(x.date) + '</td><td class="num">' + esc(numText(x.flow)) + '</td>'
+        + '<td class="num">' + esc(numText(x.volumeWan)) + '</td><td>' + esc(dash(x.type)) + '</td><td>' + esc(dash(x.operator)) + '</td></tr>';
+    }).join('');
+    var items = [
+      ['计划编号', r.planId],
+      ['用水户', r.waterUserCode + ' ' + r.waterUserName],
+      ['供水水库', r.reservoirName],
+      ['用途 / 报送人', r.purpose + ' / ' + r.reporter + (r.reportedAt ? '（' + r.reportedAt + ' 报送）' : '')],
+      ['时段天数', r.days + ' 天（已供水 ' + r.suppliedDays + ' 天，缺 ' + r.missingDays + ' 天）'],
+      ['需水量（万m³）', r.demandWan],
+      ['实际供水（万m³）', r.actualWan],
+      ['差额（万m³）', r.gapWan],
+      ['满足率', r.satisfactionRate === null ? '—' : r.satisfactionRate + '%'],
+      ['窗口内未供水日期', (r.missingDates || []).length ? r.missingDates.join('、') : '无'],
+      ['备注', r.remark]
+    ];
+    return '<tr class="detail-row" data-detail-for="' + esc(r.planId) + '"><td colspan="' + colspan + '"><div class="detail">'
+      + '<div class="detail-grid">' + items.map(itemHtml).join('') + '</div>'
+      + '<h4>对应的出库记录（哪几天、各多少流量，逐笔可追）</h4>'
+      + '<table class="mini-table"><thead><tr><th>出库记录号</th><th>日期</th><th class="num">流量（m³/s）</th><th class="num">水量（万m³）</th><th>类型</th><th>记录人</th></tr></thead>'
+      + '<tbody>' + (releaseRows || '<tr><td colspan="6">这条计划还没有对应的出库记录。</td></tr>') + '</tbody></table>'
+      + '<div class="detail-actions">'
+      + '<a class="btn btn-sm" href="#satPlansPanel" data-action="goto-plan-edit" data-id="' + esc(r.planId) + '">去修改这条计划</a>'
+      + '</div></div></td></tr>';
+  }
+
+  function renderUnmatched(s) {
+    var unclaimed = s.unmatched.unclaimed || [];
+    el('satUnclaimedCount').textContent = unclaimed.length;
+    var uBody = el('satUnclaimedRows');
+    if (!unclaimed.length) {
+      uBody.innerHTML = emptyRow(8, '没有未挂名的出库，全部出库都认领到了用水户。');
+    } else {
+      uBody.innerHTML = unclaimed.map(function (r) {
+        var plansText = (r.candidatePlans || []).length
+          ? r.candidatePlans.map(function (p) {
+            return esc(p.waterUserName + '「' + p.purpose + '」' + p.startDate + ' 至 ' + p.endDate);
+          }).join('<br>')
+          : '<span class="gap-short">不在任何计划时段内</span>';
+        var flag = r.inWindow ? ' <span class="tag is-warn">落在计划时段内</span>' : ' <span class="tag">计划外</span>';
+        return '<tr data-release-id="' + esc(r.id) + '">'
+          + '<td>' + esc(r.id) + flag + '</td>'
+          + '<td>' + esc(r.date) + '</td>'
+          + '<td>' + esc(r.reservoirName) + '</td>'
+          + '<td class="num">' + esc(numText(r.flow)) + '</td>'
+          + '<td class="num">' + esc(numText(r.volumeWan)) + '</td>'
+          + '<td>' + esc(dash(r.type)) + '</td>'
+          + '<td>' + plansText + '</td>'
+          + '<td><div class="inline-form"><select class="assign-sel" data-role="assign-user"></select>'
+          + '<button type="button" class="btn btn-sm btn-primary" data-action="assign-release" data-id="' + esc(r.id) + '">认领</button></div></td>'
+          + '</tr>';
+      }).join('');
+      fillSatisfactionSelects();
+    }
+
+    var outside = s.unmatched.outsidePlans || [];
+    el('satOutsideCount').textContent = outside.length;
+    var oBody = el('satOutsideRows');
+    if (!outside.length) {
+      oBody.innerHTML = emptyRow(7, '没有挂了名却落在计划时段外的出库。');
+    } else {
+      oBody.innerHTML = outside.map(function (r) {
+        return '<tr>'
+          + '<td>' + esc(r.id) + '</td>'
+          + '<td>' + esc(r.date) + '</td>'
+          + '<td>' + esc(r.reservoirName) + '</td>'
+          + '<td class="num">' + esc(numText(r.flow)) + '</td>'
+          + '<td class="num">' + esc(numText(r.volumeWan)) + '</td>'
+          + '<td>' + esc(r.waterUserName) + '</td>'
+          + '<td><button type="button" class="btn btn-sm" data-action="unassign-release" data-id="' + esc(r.id) + '">取消认领</button></td>'
+          + '</tr>';
+      }).join('');
+    }
+  }
+
+  function renderReconcile(s) {
+    var c = s.reconciliation;
+    el('satReconcile').innerHTML = [
+      ['全部出库水量（万m³）', c.totalReleaseWan],
+      ['其中：计划内已供（万m³）', c.inPlanWan],
+      ['其中：计划外挂名（万m³）', c.outsideWan],
+      ['其中：未认领（万m³）', c.unclaimedWan],
+      ['对账残差（万m³）', c.residual],
+      ['行计重复差（万m³）', c.rowResidual],
+      ['全部出库条数', c.totalReleaseCount],
+      ['计划内 / 计划外 / 未认领（条）', c.inPlanCount + ' / ' + c.outsideCount + ' / ' + c.unclaimedCount],
+      ['是否对平', c.balanced ? '对平' : '对不平']
+    ].map(itemHtml).join('');
+    var cal = s.caliber;
+    el('satCaliber').innerHTML = [
+      '<li>折算口径：流量（m³/s）× <b>' + cal.secondsPerDay + '</b> 秒 ÷ ' + cal.wanDivisor + ' = 水量（万m³），与「出库流量」页同一口径。</li>',
+      '<li>计入规则：' + esc(cal.windowRule) + '。</li>',
+      '<li>' + esc(cal.rateRule) + '；差额 = 需水量 − 实际供水量，正数是缺口、负数是超供。</li>',
+      '<li>' + esc(cal.rankRule) + '。</li>',
+      '<li>对账：计划内 + 计划外挂名 + 未认领 = 全部出库；残差 ' + esc(c.residual) + ' 万m³，结论以接口 <code>balanced</code> 为准：<b>' + (c.balanced ? '对平' : '对不平') + '</b>。</li>'
+    ].join('');
+    el('satDeterminism').textContent = '本次报表在服务端连算两遍，结果' + (s.determinism && s.determinism.consistent ? '一致（determinism.consistent=true）' : '不一致');
+  }
+
+  /* ---------- 需水计划子页 ---------- */
+
+  function renderPlans() {
+    var rows = state.planList || [];
+    var tbody = el('planRows');
+    var colspan = 10;
+    if (!rows.length) {
+      tbody.innerHTML = emptyRow(colspan, '还没有登记需水计划。');
+      return;
+    }
+    var html = [];
+    rows.forEach(function (p) {
+      var revoked = p.status === '已撤销';
+      html.push('<tr class="plan-row' + (revoked ? ' is-revoked' : '') + '">'
+        + '<td>' + esc(p.waterUserName) + '</td>'
+        + '<td>' + esc(p.reservoirName) + '</td>'
+        + '<td>' + esc(p.startDate) + ' 至 ' + esc(p.endDate) + '</td>'
+        + '<td class="num">' + esc(numText(p.demandWan)) + '</td>'
+        + '<td class="num">' + esc(numText(p.actualWan)) + '</td>'
+        + '<td class="num">' + (revoked ? '—' : rateTag(p.satisfactionRate)) + '</td>'
+        + '<td>' + esc(dash(p.purpose)) + '</td>'
+        + '<td>' + esc(dash(p.reporter)) + '</td>'
+        + '<td><span class="tag ' + (revoked ? 'is-over' : 'is-strong') + '">' + esc(p.status) + '</span></td>'
+        + '<td><button type="button" class="btn btn-sm" data-action="edit-plan" data-id="' + esc(p.planId) + '">修改</button> '
+        + '<button type="button" class="btn btn-sm btn-danger" data-action="delete-plan" data-id="' + esc(p.planId) + '">删除</button></td>'
+        + '</tr>');
+    });
+    tbody.innerHTML = html.join('');
+  }
+
+  /* ---------- 用水户子页 ---------- */
+
+  function renderUsers() {
+    var rows = state.waterUsers || [];
+    var tbody = el('userRows');
+    if (!rows.length) {
+      tbody.innerHTML = emptyRow(12, '还没有登记用水户。');
+      return;
+    }
+    tbody.innerHTML = rows.map(function (u) {
+      return '<tr>'
+        + '<td>' + esc(u.code) + '</td>'
+        + '<td>' + esc(u.name) + '</td>'
+        + '<td>' + esc(dash(u.contact)) + '</td>'
+        + '<td>' + esc(dash(u.reach)) + '</td>'
+        + '<td>' + statusTag(u.status) + '</td>'
+        + '<td class="num">' + esc(u.planCount) + '</td>'
+        + '<td class="num">' + esc(u.releaseCount) + '</td>'
+        + '<td class="num">' + esc(numText(u.demandWan)) + '</td>'
+        + '<td class="num">' + esc(numText(u.actualWan)) + '</td>'
+        + '<td class="num">' + (u.satisfactionRate === null ? '—' : rateTag(u.satisfactionRate)) + '</td>'
+        + '<td class="num rank-num">' + esc(u.rank === null || u.rank === undefined ? '—' : u.rank) + '</td>'
+        + '<td><button type="button" class="btn btn-sm" data-action="edit-user" data-id="' + esc(u.id) + '">修改</button></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  async function submitPlan(form) {
+    var errorBox = el('planFormError');
+    clearFormError(errorBox);
+    var values = formValues(form);
+    try {
+      var out = await api('POST', '/api/plans', {
+        waterUserId: values.waterUserId,
+        reservoirId: values.reservoirId,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        demandWan: Number(values.demandWan),
+        purpose: values.purpose,
+        reporter: values.reporter,
+        reportedAt: values.reportedAt,
+        remark: values.remark
+      });
+      form.reset();
+      var reportedAt = qs('#planForm [name="reportedAt"]');
+      if (reportedAt) reportedAt.value = todayIso();
+      setSatKind('report');
+      await reloadSatisfaction();
+      showImpact(out.impact);
+      toast('需水计划已登记，满足率与名次已重算');
+    } catch (err) {
+      showError(err, errorBox);
+    }
+  }
+
+  async function submitUser(form) {
+    var errorBox = el('userFormError');
+    clearFormError(errorBox);
+    var values = formValues(form);
+    try {
+      await api('POST', '/api/water-users', {
+        code: values.code, name: values.name, contact: values.contact,
+        phone: values.phone, reach: values.reach, status: values.status, remark: values.remark
+      });
+      form.reset();
+      toast('用水户已登记');
+      state.waterUsers = await api('GET', '/api/water-users');
+      fillSatisfactionSelects();
+      renderUsers();
+    } catch (err) {
+      showError(err, errorBox);
+    }
+  }
+
+  // 用弹层改计划/用水户，保存后把影响面带回报表
+  function openPlanEditModal(planId) {
+    var p = (state.planList || []).find(function (x) { return x.planId === planId; });
+    if (!p) return;
+    el('modalTitle').textContent = '修改需水计划';
+    el('modalBody').innerHTML = '<div class="form-grid">'
+      + '<label class="field"><span>用水户</span><select name="waterUserId">' + planUserOptions(p.waterUserId) + '</select></label>'
+      + '<label class="field"><span>供水水库</span><select name="reservoirId">' + reservoirOptions(p.reservoirId) + '</select></label>'
+      + '<label class="field"><span>时段起</span><input type="date" name="startDate" value="' + esc(p.startDate) + '" /></label>'
+      + '<label class="field"><span>时段止</span><input type="date" name="endDate" value="' + esc(p.endDate) + '" /></label>'
+      + '<label class="field"><span>需水量（万m³）</span><input type="number" step="0.01" name="demandWan" value="' + esc(p.demandWan) + '" /></label>'
+      + '<label class="field"><span>用途</span><input type="text" name="purpose" value="' + esc(p.purpose) + '" /></label>'
+      + '<label class="field"><span>报送人</span><input type="text" name="reporter" value="' + esc(p.reporter) + '" /></label>'
+      + '<label class="field"><span>报送日期</span><input type="date" name="reportedAt" value="' + esc(p.reportedAt) + '" /></label>'
+      + '<label class="field field-wide"><span>备注</span><input type="text" name="remark" value="' + esc(p.remark || '') + '" /></label>'
+      + '</div>';
+    el('modalFoot').innerHTML = '<button type="button" class="btn btn-ghost" data-action="close-modal">取消</button>'
+      + '<button type="button" class="btn btn-primary" data-action="save-plan-edit" data-id="' + esc(planId) + '">保存调整</button>';
+    el('modalError').setAttribute('hidden', '');
+    el('modalMask').removeAttribute('hidden');
+  }
+
+  function planUserOptions(current) {
+    return optionsHtml((state.waterUsers || []).map(function (u) {
+      return { value: u.id, label: u.code + ' ' + u.name };
+    }), current, '请选择用水户');
+  }
+
+  async function savePlanEdit(planId) {
+    var body = {};
+    qsa('#modalBody [name]').forEach(function (node) {
+      body[node.getAttribute('name')] = node.name === 'demandWan' ? Number(node.value) : node.value;
+    });
+    try {
+      var out = await api('PATCH', '/api/plans/' + encodeURIComponent(planId), body);
+      closeModal();
+      setSatKind('report');
+      await reloadSatisfaction();
+      showImpact(out.impact);
+      toast('计划已调整，满足率与名次已重算');
+    } catch (err) {
+      showError(err, el('modalError'));
+    }
+  }
+
+  function openUserEditModal(userId) {
+    var u = (state.waterUsers || []).find(function (x) { return x.id === userId; });
+    if (!u) return;
+    el('modalTitle').textContent = '修改用水户';
+    el('modalBody').innerHTML = '<div class="form-grid">'
+      + '<label class="field"><span>名称</span><input type="text" name="name" value="' + esc(u.name) + '" /></label>'
+      + '<label class="field"><span>编号</span><input type="text" name="code" value="' + esc(u.code) + '" /></label>'
+      + '<label class="field"><span>联系人</span><input type="text" name="contact" value="' + esc(u.contact || '') + '" /></label>'
+      + '<label class="field"><span>电话</span><input type="text" name="phone" value="' + esc(u.phone || '') + '" /></label>'
+      + '<label class="field"><span>取水位置</span><input type="text" name="reach" value="' + esc(u.reach || '') + '" /></label>'
+      + '<label class="field"><span>状态</span><select name="status">'
+      + '<option value="正常"' + (u.status === '正常' ? ' selected' : '') + '>正常</option>'
+      + '<option value="停用"' + (u.status === '停用' ? ' selected' : '') + '>停用</option>'
+      + '</select></label>'
+      + '<label class="field field-wide"><span>备注</span><input type="text" name="remark" value="' + esc(u.remark || '') + '" /></label>'
+      + '</div>';
+    el('modalFoot').innerHTML = '<button type="button" class="btn btn-ghost" data-action="close-modal">取消</button>'
+      + '<button type="button" class="btn btn-primary" data-action="save-user-edit" data-id="' + esc(userId) + '">保存</button>';
+    el('modalError').setAttribute('hidden', '');
+    el('modalMask').removeAttribute('hidden');
+  }
+
+  async function saveUserEdit(userId) {
+    var body = {};
+    qsa('#modalBody [name]').forEach(function (node) { body[node.getAttribute('name')] = node.value; });
+    try {
+      await api('PATCH', '/api/water-users/' + encodeURIComponent(userId), body);
+      closeModal();
+      await reloadSatisfaction();
+      toast('用水户已更新');
+    } catch (err) {
+      showError(err, el('modalError'));
+    }
+  }
+
+  async function deletePlan(btn) {
+    if (!armDelete(btn)) return;
+    try {
+      var out = await api('DELETE', '/api/plans/' + encodeURIComponent(btn.dataset.id));
+      setSatKind('report');
+      await reloadSatisfaction();
+      showImpact(out.impact);
+      toast('计划已删除，满足度与名次已重算');
+    } catch (err) {
+      showError(err);
+      btn.dataset.armed = '';
+    }
+  }
+
+  async function assignRelease(btn) {
+    var row = btn.closest('tr');
+    var sel = qs('[data-role="assign-user"]', row);
+    var userId = sel ? sel.value : '';
+    if (!userId) { showNotice('请先选择要认领到的用水户', true); return; }
+    try {
+      var out = await api('PATCH', '/api/flows/release/' + encodeURIComponent(btn.dataset.id) + '/assign', { waterUserId: userId });
+      await reloadSatisfaction();
+      showImpact(out.impact);
+      toast(out.subject.outsidePlan ? '已认领，但这一天在该户计划时段外（计入计划外出水）' : '已认领，计划实际供水已更新');
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  async function unassignRelease(btn) {
+    try {
+      var out = await api('PATCH', '/api/flows/release/' + encodeURIComponent(btn.dataset.id) + '/assign', { waterUserId: '' });
+      await reloadSatisfaction();
+      showImpact(out.impact);
+      toast('已取消认领，该出库回到未认领列表');
+    } catch (err) {
+      showError(err);
+    }
+  }
+
   /* ================= 设置弹层 ================= */
 
   function openSettingsModal() {
@@ -926,7 +1460,8 @@
         flow: Number(values.flow),
         type: values.type,
         operator: values.operator,
-        remark: values.remark
+        remark: values.remark,
+        waterUserId: kind === 'release' ? (values.waterUserId || '') : ''
       });
       toast(kind === 'inflow' ? '入库流量已新增' : '出库流量已新增');
       await loadWaterRecords();
@@ -1057,6 +1592,21 @@
       return;
     }
     if (action === 'switch-water') { setWaterKind(btn.dataset.kind); return; }
+    if (action === 'switch-satisfaction') { setSatKind(btn.dataset.kind); return; }
+
+    if (action === 'toggle-sat-plan') {
+      state.expanded.satPlan = state.expanded.satPlan === btn.dataset.id ? '' : btn.dataset.id;
+      renderSatisfaction();
+      return;
+    }
+    if (action === 'goto-plan-edit') { openPlanEditModal(btn.dataset.id); return; }
+    if (action === 'assign-release') { await assignRelease(btn); return; }
+    if (action === 'unassign-release') { await unassignRelease(btn); return; }
+    if (action === 'edit-plan') { openPlanEditModal(btn.dataset.id); return; }
+    if (action === 'delete-plan') { await deletePlan(btn); return; }
+    if (action === 'edit-user') { openUserEditModal(btn.dataset.id); return; }
+    if (action === 'save-plan-edit') { await savePlanEdit(btn.dataset.id); return; }
+    if (action === 'save-user-edit') { await saveUserEdit(btn.dataset.id); return; }
 
     if (action === 'toggle-reservoir') { await toggleReservoir(btn.dataset.reservoirId); return; }
     if (action === 'toggle-level') { toggleRow('level', btn.dataset.id); renderWater(); return; }
@@ -1244,6 +1794,7 @@
       }
       if (scope === 'orders') { reloadView('orders'); return; }
       if (scope === 'water') { reloadView('water').then(updateWaterCounts); return; }
+      if (scope === 'satisfaction') { reloadView('satisfaction'); return; }
       if (scope === 'balance') { renderBalance(); }
     });
 
@@ -1269,13 +1820,15 @@
     el('releaseForm').addEventListener('submit', function (event) { event.preventDefault(); submitFlow(event.target, 'release'); });
     el('orderForm').addEventListener('submit', function (event) { event.preventDefault(); submitOrder(event.target); });
     el('balanceForm').addEventListener('submit', function (event) { event.preventDefault(); submitBalance(event.target); });
+    el('planForm').addEventListener('submit', function (event) { event.preventDefault(); submitPlan(event.target); });
+    el('userForm').addEventListener('submit', function (event) { event.preventDefault(); submitUser(event.target); });
   }
 
   /* ================= 下拉与默认值 ================= */
 
   function fillReservoirSelects() {
     var list = state.reservoirs || [];
-    ['levelFormReservoir', 'inflowFormReservoir', 'releaseFormReservoir', 'orderFormReservoir', 'balanceReservoir'].forEach(function (id) {
+    ['levelFormReservoir', 'inflowFormReservoir', 'releaseFormReservoir', 'orderFormReservoir', 'balanceReservoir', 'planFormReservoir'].forEach(function (id) {
       var node = el(id);
       if (!node) return;
       var current = node.value;
@@ -1305,6 +1858,23 @@
     if (balanceFrom && !balanceFrom.value) balanceFrom.value = state.filters.balance.from;
     var balanceTo = el('balanceTo');
     if (balanceTo && !balanceTo.value) balanceTo.value = state.filters.balance.to;
+
+    var planUser = el('planFormUser');
+    if (planUser) {
+      var cur = planUser.value;
+      planUser.innerHTML = optionsHtml((state.waterUsers || []).map(function (u) {
+        return { value: u.id, label: u.code + ' ' + u.name };
+      }), cur, '请选择用水户');
+      if (!planUser.value && (state.waterUsers || []).length) planUser.value = state.waterUsers[0].id;
+    }
+    var releaseUser = el('releaseFormUser');
+    if (releaseUser) {
+      releaseUser.innerHTML = '<option value="">不挂用水户</option>' + (state.waterUsers || []).map(function (u) {
+        return '<option value="' + esc(u.id) + '">' + esc(u.code + ' ' + u.name) + '</option>';
+      }).join('');
+    }
+    var reportedAt = qs('#planForm [name="reportedAt"]');
+    if (reportedAt && !reportedAt.value) reportedAt.value = todayIso();
   }
 
   /* ================= 启动 ================= */
@@ -1312,6 +1882,7 @@
   async function boot() {
     bindEvents();
     setWaterKind(state.waterKind);
+    setSatKind(state.satKind);
     setView('overview');
     fillReservoirSelects();
 
@@ -1330,18 +1901,25 @@
       state.flows.inflow = await api('GET', '/api/flows?kind=inflow');
       state.flows.release = await api('GET', '/api/flows?kind=release');
       state.orders = await api('GET', '/api/orders');
+      state.waterUsers = await api('GET', '/api/water-users');
+      state.satisfaction = await api('GET', '/api/satisfaction');
+      state.planList = await api('GET', '/api/plans?includeRevoked=1');
     } catch (err) {
       showError(err);
     }
 
     renderTopbar();
     fillReservoirSelects();
+    fillSatisfactionSelects();
     renderSidebar();
     renderOverview();
     renderReservoirs();
     renderWater();
     renderOrders();
     renderBalance();
+    renderSatisfaction();
+    renderPlans();
+    renderUsers();
   }
 
   if (document.readyState === 'loading') {
