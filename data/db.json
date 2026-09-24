@@ -1819,5 +1819,337 @@
         }
       ]
     }
+  ],
+  "waterUsers": [
+    {
+      "id": "usr-0001",
+      "code": "YH001",
+      "name": "青岭东干渠用水户协会",
+      "contact": "王会长",
+      "canal": "东干渠",
+      "remark": "灌溉大户",
+      "createdAt": "2026-04-20"
+    },
+    {
+      "id": "usr-0002",
+      "code": "YH002",
+      "name": "青岭西干渠用水户协会",
+      "contact": "李主任",
+      "canal": "西干渠",
+      "remark": "",
+      "createdAt": "2026-04-20"
+    },
+    {
+      "id": "usr-0003",
+      "code": "YH003",
+      "name": "白河灌区管理所",
+      "contact": "赵站长",
+      "canal": "白河总干",
+      "remark": "",
+      "createdAt": "2026-04-22"
+    },
+    {
+      "id": "usr-0004",
+      "code": "YH004",
+      "name": "青岭镇自来水厂",
+      "contact": "陈厂长",
+      "canal": "供水专线",
+      "remark": "生活供水",
+      "createdAt": "2026-04-25"
+    }
+  ],
+  "demands": [
+    {
+      "id": "dem-0001",
+      "no": "XU-0001",
+      "userId": "usr-0001",
+      "reservoirId": "res-0001",
+      "windowStart": "2026-05-06",
+      "windowEnd": "2026-05-10",
+      "demandWan": 2300,
+      "purpose": "春灌",
+      "reporter": "王会长",
+      "submittedAt": "2026-04-28",
+      "remark": "东干渠一轮春灌",
+      "createdAt": "2026-04-28"
+    },
+    {
+      "id": "dem-0002",
+      "no": "XU-0002",
+      "userId": "usr-0002",
+      "reservoirId": "res-0001",
+      "windowStart": "2026-05-06",
+      "windowEnd": "2026-05-10",
+      "demandWan": 1500,
+      "purpose": "春灌",
+      "reporter": "李主任",
+      "submittedAt": "2026-04-28",
+      "remark": "西干渠同期用水，实际未安排",
+      "createdAt": "2026-04-28"
+    },
+    {
+      "id": "dem-0003",
+      "no": "XU-0003",
+      "userId": "usr-0003",
+      "reservoirId": "res-0002",
+      "windowStart": "2026-05-01",
+      "windowEnd": "2026-05-10",
+      "demandWan": 3200,
+      "purpose": "灌溉",
+      "reporter": "赵站长",
+      "submittedAt": "2026-04-25",
+      "remark": "5 月 9、10 日没有登记供水",
+      "createdAt": "2026-04-25"
+    },
+    {
+      "id": "dem-0004",
+      "no": "XU-0004",
+      "userId": "usr-0004",
+      "reservoirId": "res-0001",
+      "windowStart": "2026-09-08",
+      "windowEnd": "2026-09-12",
+      "demandWan": 2500,
+      "purpose": "生活供水",
+      "reporter": "陈厂长",
+      "submittedAt": "2026-09-01",
+      "remark": "实际放水大于计划",
+      "createdAt": "2026-09-01"
+    },
+    {
+      "id": "dem-0005",
+      "no": "XU-0005",
+      "userId": "usr-0001",
+      "reservoirId": "res-0001",
+      "windowStart": "2026-06-01",
+      "windowEnd": "2026-06-05",
+      "demandWan": 4000,
+      "purpose": "夏灌",
+      "reporter": "王会长",
+      "submittedAt": "2026-05-28",
+      "remark": "6 月 5 日报表与出库记录对不上",
+      "createdAt": "2026-05-28"
+    }
+  ],
+  "allocations": [
+    {
+      "id": "alc-0001",
+      "demandId": "dem-0001",
+      "date": "2026-05-06",
+      "releaseId": "out-0006",
+      "flow": 52,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0002",
+      "demandId": "dem-0001",
+      "date": "2026-05-07",
+      "releaseId": "out-0007",
+      "flow": 52,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0003",
+      "demandId": "dem-0001",
+      "date": "2026-05-08",
+      "releaseId": "out-0008",
+      "flow": 52,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0004",
+      "demandId": "dem-0001",
+      "date": "2026-05-09",
+      "releaseId": "out-0009",
+      "flow": 52,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0005",
+      "demandId": "dem-0001",
+      "date": "2026-05-10",
+      "releaseId": "out-0010",
+      "flow": 52,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0006",
+      "demandId": "dem-0003",
+      "date": "2026-05-01",
+      "releaseId": "out-0043",
+      "flow": 38,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0007",
+      "demandId": "dem-0003",
+      "date": "2026-05-02",
+      "releaseId": "out-0044",
+      "flow": 38,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0008",
+      "demandId": "dem-0003",
+      "date": "2026-05-03",
+      "releaseId": "out-0045",
+      "flow": 38,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0009",
+      "demandId": "dem-0003",
+      "date": "2026-05-04",
+      "releaseId": "out-0046",
+      "flow": 38,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0010",
+      "demandId": "dem-0003",
+      "date": "2026-05-05",
+      "releaseId": "out-0047",
+      "flow": 38,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0011",
+      "demandId": "dem-0003",
+      "date": "2026-05-06",
+      "releaseId": "out-0048",
+      "flow": 38,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0013",
+      "demandId": "dem-0003",
+      "date": "2026-05-08",
+      "releaseId": "out-0050",
+      "flow": 38,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0014",
+      "demandId": "dem-0004",
+      "date": "2026-09-08",
+      "releaseId": "out-0031",
+      "flow": 60,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0015",
+      "demandId": "dem-0004",
+      "date": "2026-09-09",
+      "releaseId": "out-0032",
+      "flow": 60,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0016",
+      "demandId": "dem-0004",
+      "date": "2026-09-10",
+      "releaseId": "out-0033",
+      "flow": 60,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0017",
+      "demandId": "dem-0004",
+      "date": "2026-09-11",
+      "releaseId": "out-0034",
+      "flow": 60,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0018",
+      "demandId": "dem-0004",
+      "date": "2026-09-12",
+      "releaseId": "out-0035",
+      "flow": 60,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0019",
+      "demandId": "dem-0005",
+      "date": "2026-06-01",
+      "releaseId": "out-0021",
+      "flow": 96,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0020",
+      "demandId": "dem-0005",
+      "date": "2026-06-02",
+      "releaseId": "out-0022",
+      "flow": 96,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0021",
+      "demandId": "dem-0005",
+      "date": "2026-06-03",
+      "releaseId": "out-0023",
+      "flow": 96,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0022",
+      "demandId": "dem-0005",
+      "date": "2026-06-04",
+      "releaseId": "out-0024",
+      "flow": 96,
+      "recorder": "值班员",
+      "remark": "",
+      "createdAt": "2026-09-20"
+    },
+    {
+      "id": "alc-0023",
+      "demandId": "dem-0005",
+      "date": "2026-06-05",
+      "releaseId": "",
+      "flow": 40,
+      "recorder": "王会长",
+      "remark": "协会报表填 40，出库记录当天是 96",
+      "createdAt": "2026-09-20"
+    }
   ]
 }

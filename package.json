@@ -6,7 +6,9 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node server/index.js"
+    "dev": "node server/index.js",
+    "seed-demands": "node scripts/seed-demands.js",
+    "check": "node scripts/check-demand.js"
   },
   "dependencies": {
     "express": "^4.19.2"

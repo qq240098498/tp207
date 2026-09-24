@@ -466,3 +466,35 @@ code {
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; flex-direction: row; flex-wrap: wrap; }
 }
+
+/* ---------- 需水满足：优先名次与调整影响面 ---------- */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+}
+.rank-1 { background: var(--orange); border-color: var(--orange); color: #fff; }
+.rank-2 { background: #e07a3f; border-color: #e07a3f; color: #fff; }
+.rank-3 { background: #e8a06a; border-color: #e8a06a; color: #fff; }
+
+.notice.is-impact {
+  background: var(--indigo-soft);
+  border-color: #c3cdf0;
+  border-left-color: var(--indigo);
+  color: var(--indigo-deep);
+  margin: 0 0 14px;
+}
+.impact-list { margin: 8px 0 0; padding-left: 18px; }
+.impact-list li { margin-bottom: 4px; }
+
+#impactBanner .notice { margin-bottom: 14px; }
+
+.mini-table code { font-size: 11px; }

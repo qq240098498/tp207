@@ -6,7 +6,7 @@
 
   /* ================= 常量与工具 ================= */
 
-  var VIEW_IDS = ['overview', 'reservoirs', 'water', 'orders', 'balance'];
+  var VIEW_IDS = ['overview', 'reservoirs', 'water', 'orders', 'balance', 'satisfaction'];
   var ORDER_STATUSES = ['已下达', '执行中', '已完成', '已撤销'];
   var RESERVOIR_STATUSES = ['运行', '检修'];
 
@@ -128,7 +128,11 @@
     flows: { inflow: [], release: [] },
     orders: [],
     balance: null,
-    expanded: { reservoir: '', level: '', flow: '', order: '' },
+    waterUsers: [],
+    satisfaction: null,
+    lastImpact: null,
+    allocationReleases: [],
+    expanded: { reservoir: '', level: '', flow: '', order: '', satisfaction: '' },
     reservoirDetail: null,
     curveDraft: null,
     curveQuery: { reservoirId: '', byLevel: null, byCapacity: null },
@@ -137,7 +141,8 @@
       reservoirs: { basin: '', status: '', keyword: '' },
       water: { reservoirId: '', from: '', to: '' },
       orders: { reservoirId: '', status: '' },
-      balance: { reservoirId: '', from: '2026-05-01', to: '2026-05-10' }
+      balance: { reservoirId: '', from: '2026-05-01', to: '2026-05-10' },
+      satisfaction: { reservoirId: '', userId: '' }
     }
   };
 
@@ -245,6 +250,9 @@
         renderOrders();
       } else if (view === 'balance') {
         renderBalance();
+      } else if (view === 'satisfaction') {
+        await loadSatisfaction();
+        renderSatisfaction();
       }
     } catch (err) {
       showError(err);
@@ -372,6 +380,21 @@
       html.push('<li>每天损失 ' + esc(dash(state.settings ? state.settings.lossPerDayWan : '')) + ' 万m³</li>');
       html.push('<li>容差 ' + esc(dash(state.settings ? state.settings.balanceToleranceWan : '')) + ' 万m³</li>');
       html.push('<li>汛期 ' + esc(dash(state.settings ? state.settings.floodSeasonStart + ' 至 ' + state.settings.floodSeasonEnd : '')) + '</li>');
+      html.push('</ul></div>');
+    } else if (view === 'satisfaction') {
+      var sf = state.filters.satisfaction;
+      html.push('<div class="side-block">');
+      html.push('<h3>筛选满足度</h3>');
+      html.push('<label class="field"><span>水库</span><select data-filter-key="reservoirId" data-filter-scope="satisfaction">' + reservoirOptions(sf.reservoirId) + '</select></label>');
+      html.push('<label class="field"><span>用水户</span><select data-filter-key="userId" data-filter-scope="satisfaction">' + satisfactionUserOptions(sf.userId) + '</select></label>');
+      html.push('<button type="button" class="btn btn-ghost btn-sm" data-action="reset-filter" data-scope="satisfaction">重置筛选</button>');
+      html.push('</div>');
+      html.push('<div class="side-block"><h3>口径</h3><ul class="side-list">');
+      html.push('<li>水量 = 流量 × 86400 ÷ 10000（万m³）</li>');
+      html.push('<li>满足率 = 实际供水 ÷ 需水量</li>');
+      html.push('<li>差额 = 需水量 − 实际供水</li>');
+      html.push('<li>排序按满足率从低到高，接口同一次计算给出</li>');
+      html.push('<li>调整后写清影响的时段与用水户</li>');
       html.push('</ul></div>');
     }
 
@@ -827,6 +850,454 @@
       + '</ul>';
   }
 
+  /* ================= 需水满足 ================= */
+
+  function satisfactionUserOptions(current) {
+    return optionsHtml((state.waterUsers || []).map(function (u) {
+      return { value: u.id, label: u.code + ' ' + u.name };
+    }), current, '全部用水户');
+  }
+
+  async function loadSatisfaction() {
+    var f = state.filters.satisfaction;
+    var q = queryString({ reservoirId: f.reservoirId, userId: f.userId });
+    var results = await Promise.all([
+      api('GET', '/api/satisfaction' + q),
+      api('GET', '/api/water-users')
+    ]);
+    state.satisfaction = results[0];
+    state.waterUsers = results[1];
+  }
+
+  function rateClass(rate) {
+    if (rate === null || rate === undefined) return 'tag';
+    if (rate < 0.9) return 'tag is-serious';
+    if (rate < 1) return 'tag is-warn';
+    return 'tag is-ok';
+  }
+
+  function rateTag(row) {
+    return '<span class="' + rateClass(row.rate) + '">' + esc(numText(row.ratePercent)) + '%</span>';
+  }
+
+  function gapTag(row) {
+    if (row.shortage) return '<span class="tag is-serious">缺 ' + esc(numText(row.gapWan)) + '</span>';
+    if (row.overSupply) return '<span class="tag is-strong">超 ' + esc(numText(Math.abs(row.gapWan))) + '</span>';
+    return '<span class="tag is-ok">刚好</span>';
+  }
+
+  function renderImpactBanner() {
+    var box = el('impactBanner');
+    var impact = state.lastImpact;
+    if (!impact) { box.innerHTML = ''; return; }
+    if (impact.unchanged) {
+      box.innerHTML = '<div class="notice"><span class="notice-text">这次调整没有改变任何满足率与排序。</span></div>';
+      return;
+    }
+    var periods = impact.affectedPeriods.map(function (p) {
+      return esc(p.reservoirName) + ' ' + esc(p.period);
+    });
+    var users = impact.affectedUsers.map(function (u) { return esc(u.userName); });
+    var lines = impact.changed.map(function (c) {
+      var parts = [];
+      var rateText = function (v) { return v === null || v === undefined ? '已删除' : numText(v * 100) + '%'; };
+      var gapText = function (v) { return v === null || v === undefined ? '已删除' : numText(v); };
+      if (c.changes.rate) parts.push('满足率 ' + rateText(c.changes.rate.before) + ' → ' + rateText(c.changes.rate.after));
+      if (c.changes.gapWan) parts.push('差额 ' + gapText(c.changes.gapWan.before) + ' → ' + gapText(c.changes.gapWan.after));
+      if (c.rankChanged) parts.push('优先名次 ' + (c.changes.rank.before === null ? '新增' : '#' + c.changes.rank.before) + ' → ' + (c.removed ? '已删除' : '#' + c.changes.rank.after));
+      if (c.becameShort) parts.push('转为供不够');
+      if (c.resolvedShort) parts.push('缺口已补齐');
+      return '<li><b>' + esc(c.no) + ' ' + esc(c.userName) + '</b>（' + esc(c.reservoirName) + ' ' + esc(c.period) + '）：' + esc(parts.join('，')) + '</li>';
+    });
+    box.innerHTML = '<div class="notice is-impact"><span class="notice-text">'
+      + '本次调整影响 <b>' + impact.affectedPeriods.length + '</b> 个时段、<b>' + impact.affectedUsers.length + '</b> 个用水户：'
+      + '<br>时段：' + (periods.length ? periods.join('；') : '—')
+      + '<br>用水户：' + (users.length ? users.join('、') : '—')
+      + '<ul class="impact-list">' + lines.join('') + '</ul>'
+      + '</span></div>';
+  }
+
+  function renderSatisfactionCards() {
+    var box = el('satisfactionCards');
+    var s = state.satisfaction;
+    if (!s) { box.innerHTML = '<p class="empty">数据还在加载…</p>'; return; }
+    var t = s.totals;
+    box.innerHTML = [
+      metricCard('计划份数', t.demandCount, '参与本次满足度计算', 'satisfaction', ''),
+      metricCard('涉及用水户', t.userCount, '按用水户登记需水计划', 'satisfaction', ''),
+      metricCard('需水量合计', t.demandWan, '单位 万m³', 'satisfaction', ''),
+      metricCard('实际供水合计', t.actualWan, '能追到出库记录的水量', 'satisfaction', ''),
+      metricCard('总差额', t.gapWan, '正数为还缺的水（万m³）', 'satisfaction', '', t.gapWan > 0),
+      metricCard('总体满足率', numText(t.rate * 100) + '%', '总实际供水 ÷ 总需水量', 'satisfaction', '', t.rate < 0.9),
+      metricCard('还没供够', t.shortageCount, '差额为正的计划份数', 'satisfaction', '', t.shortageCount > 0),
+      metricCard('已供够或超供', t.fullCount, '差额不大于 0', 'satisfaction', ''),
+      metricCard('对不上', t.unmatchedCount, '登记与出库记录对不上的条数', 'satisfaction', '', t.unmatchedCount > 0)
+    ].join('');
+  }
+
+  function renderPriority() {
+    var tbody = el('priorityRows');
+    var s = state.satisfaction;
+    if (!s) { tbody.innerHTML = emptyRow(11, '数据还在加载…'); return; }
+    if (!s.priority.length) { tbody.innerHTML = emptyRow(11, '还没有需水计划，先在下方登记。'); return; }
+    tbody.innerHTML = s.priority.map(function (p) {
+      return '<tr data-action="locate-demand" data-id="' + esc(p.demandId) + '">'
+        + '<td><span class="rank-badge rank-' + (p.rank <= 3 ? p.rank : 'n') + '">#' + p.rank + '</span></td>'
+        + '<td>' + esc(p.no) + '</td>'
+        + '<td>' + esc(p.userName) + '</td>'
+        + '<td>' + esc(p.reservoirName) + '</td>'
+        + '<td>' + esc(p.period) + '</td>'
+        + '<td>' + esc(dash(p.purpose)) + '</td>'
+        + '<td class="num">' + esc(numText(p.demandWan)) + '</td>'
+        + '<td class="num">' + esc(numText(p.actualWan)) + '</td>'
+        + '<td class="num">' + esc(numText(p.gapWan)) + '</td>'
+        + '<td class="num">' + rateTag(p) + '</td>'
+        + '<td>' + gapTag(p) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function dayItemsHtml(row) {
+    if (!row.days.length) return '<p class="empty">时段内还没有登记任何实际供水。</p>';
+    var head = '<table class="mini-table"><thead><tr><th>日期</th><th class="num">登记流量</th><th class="num">出库记录流量</th><th class="num">计水量（万m³）</th><th>类型/记录人</th><th>出库记录</th><th>核对</th><th>操作</th></tr></thead><tbody>';
+    var body = row.days.map(function (day) {
+      return day.items.map(function (it) {
+        var check = it.matched
+          ? '<span class="tag is-ok">对得上</span>'
+          : '<span class="tag is-serious">' + esc((it.problems || ['对不到出库记录']).join('；')) + '</span>';
+        var link = it.releaseId
+          ? '<code>' + esc(it.releaseId) + '</code>'
+          : '<span class="tag is-warn">未挂出库记录</span>';
+        return '<tr>'
+          + '<td>' + esc(day.date) + '</td>'
+          + '<td class="num">' + esc(numText(it.declaredFlow)) + '</td>'
+          + '<td class="num">' + esc(numText(it.releaseFlow)) + '</td>'
+          + '<td class="num">' + esc(numText(it.volumeWan)) + '</td>'
+          + '<td>' + esc(dash(it.type || it.operator)) + '</td>'
+          + '<td>' + link + '</td>'
+          + '<td>' + check + '</td>'
+          + '<td><button type="button" class="btn btn-sm btn-danger" data-action="delete-allocation" data-id="' + esc(it.allocationId) + '">删除登记</button></td>'
+          + '</tr>';
+      }).join('');
+    }).join('');
+    return head + body + '</tbody></table>';
+  }
+
+  function unlinkedHtml(row) {
+    if (!row.unlinkedReleases.length) return '';
+    var body = row.unlinkedReleases.map(function (r) {
+      return '<tr><td>' + esc(r.date) + '</td><td class="num">' + esc(numText(r.flow)) + '</td><td class="num">' + esc(numText(r.volumeWan)) + '</td><td><code>' + esc(r.releaseId) + '</code></td>'
+        + '<td><button type="button" class="btn btn-sm" data-action="fill-allocation" data-demand-id="' + esc(row.demandId) + '" data-date="' + esc(r.date) + '" data-release-id="' + esc(r.releaseId) + '">补登记到本计划</button></td></tr>';
+    }).join('');
+    return '<h4>时段内对不上的出库记录 <span class="card-sub">共 ' + row.unlinkedReleases.length + ' 条，有出库水但没登记给谁</span></h4>'
+      + '<table class="mini-table"><thead><tr><th>日期</th><th class="num">流量</th><th class="num">水量</th><th>出库记录</th><th>操作</th></tr></thead><tbody>' + body + '</tbody></table>';
+  }
+
+  function unmatchedAllocHtml(row) {
+    if (!row.unmatchedAllocations.length) return '';
+    var body = row.unmatchedAllocations.map(function (a) {
+      return '<tr><td>' + esc(a.date) + '</td><td class="num">' + esc(numText(a.flow)) + '</td><td class="num">' + esc(numText(a.volumeWan)) + '</td><td>' + (a.releaseId ? '<code>' + esc(a.releaseId) + '</code>' : '—') + '</td><td>' + esc(a.reasons.join('；')) + '</td>'
+        + '<td><button type="button" class="btn btn-sm btn-danger" data-action="delete-allocation" data-id="' + esc(a.allocationId) + '">删除登记</button></td></tr>';
+    }).join('');
+    return '<h4>登记了但对不到出库记录 <span class="card-sub">共 ' + row.unmatchedAllocations.length + ' 条，按登记流量计入实际供水并单列</span></h4>'
+      + '<table class="mini-table"><thead><tr><th>日期</th><th class="num">登记流量</th><th class="num">计水量</th><th>所填出库记录</th><th>问题</th><th>操作</th></tr></thead><tbody>' + body + '</tbody></table>';
+  }
+
+  function demandEditHtml(row) {
+    var users = (state.waterUsers || []).map(function (u) {
+      return '<option value="' + esc(u.id) + '"' + (u.id === row.userId ? ' selected' : '') + '>' + esc(u.code + ' ' + u.name) + '</option>';
+    }).join('');
+    var reservoirs = (state.reservoirs || []).map(function (r) {
+      return '<option value="' + esc(r.id) + '"' + (r.id === row.reservoirId ? ' selected' : '') + '>' + esc(r.code + ' ' + r.name) + '</option>';
+    }).join('');
+    return '<h4>调整计划 <span class="card-sub">保存后满足率与优先排序立刻重算，并写清影响面</span></h4>'
+      + '<div class="inline-form">'
+      + '<label class="field"><span>用水户</span><select data-demand-field="userId">' + users + '</select></label>'
+      + '<label class="field"><span>供水水库</span><select data-demand-field="reservoirId">' + reservoirs + '</select></label>'
+      + '<label class="field"><span>时段起</span><input type="date" data-demand-field="windowStart" value="' + esc(row.windowStart) + '" /></label>'
+      + '<label class="field"><span>时段止</span><input type="date" data-demand-field="windowEnd" value="' + esc(row.windowEnd) + '" /></label>'
+      + '<label class="field"><span>需水量（万m³）</span><input type="number" step="0.01" data-demand-field="demandWan" value="' + esc(numText(row.demandWan)) + '" /></label>'
+      + '<label class="field"><span>用途</span><input type="text" data-demand-field="purpose" value="' + esc(row.purpose) + '" /></label>'
+      + '<label class="field"><span>报送人</span><input type="text" data-demand-field="reporter" value="' + esc(row.reporter) + '" /></label>'
+      + '<button type="button" class="btn btn-primary btn-sm" data-action="save-demand" data-id="' + esc(row.demandId) + '">保存调整</button>'
+      + '<button type="button" class="btn btn-sm btn-danger" data-action="delete-demand" data-id="' + esc(row.demandId) + '">删除计划</button>'
+      + '</div>'
+      + '<div class="form-error" data-role="demand-error" hidden></div>';
+  }
+
+  function satisfactionDetailHtml(row, colspan) {
+    var items = [
+      ['计划编号', row.no],
+      ['报送日期', row.submittedAt],
+      ['报送人', row.reporter],
+      ['用途', row.purpose],
+      ['需水量（万m³）', row.demandWan],
+      ['实际供水（万m³）', row.actualWan],
+      ['差额（万m³）', row.gapWan],
+      ['满足率', row.ratePercent + '%'],
+      ['当前优先名次', '#' + row.rank],
+      ['对应出库记录条数', row.linkedReleaseCount],
+      ['实际供水登记条数', row.allocationCount],
+      ['对不上条数', row.unmatchedAllocationCount + row.unlinkedReleaseCount]
+    ];
+    return '<tr class="detail-row"><td colspan="' + colspan + '"><div class="detail" data-demand-id="' + esc(row.demandId) + '">'
+      + '<div class="detail-grid">' + items.map(itemHtml).join('') + '</div>'
+      + '<h4>实际供水量追到出库记录（哪几天、各多少流量）</h4>'
+      + dayItemsHtml(row)
+      + unlinkedHtml(row)
+      + unmatchedAllocHtml(row)
+      + demandEditHtml(row)
+      + '</div></td></tr>';
+  }
+
+  function renderSatisfactionRows() {
+    var tbody = el('satisfactionRows');
+    var s = state.satisfaction;
+    var colspan = columnCount('satisfactionRows');
+    el('satisfactionCount').textContent = s ? '共 ' + s.rows.length + ' 份计划' : '共 0 份计划';
+    if (!s) { tbody.innerHTML = emptyRow(colspan, '数据还在加载…'); return; }
+    var rows = s.rows;
+    if (!rows.length) { tbody.innerHTML = emptyRow(colspan, '没有符合筛选的需水计划。'); return; }
+    var html = [];
+    rows.forEach(function (row) {
+      var expanded = state.expanded.satisfaction === row.demandId;
+      var unmatchedN = row.unmatchedAllocationCount + row.unlinkedReleaseCount;
+      html.push('<tr class="satisfaction-row' + (expanded ? ' is-expanded' : '') + '" data-action="toggle-satisfaction" data-id="' + esc(row.demandId) + '">'
+        + '<td>' + esc(row.no) + '</td>'
+        + '<td>' + esc(row.userName) + '</td>'
+        + '<td>' + esc(row.reservoirName) + '</td>'
+        + '<td>' + esc(row.period) + '</td>'
+        + '<td>' + esc(dash(row.purpose)) + '</td>'
+        + '<td>' + esc(dash(row.reporter)) + '</td>'
+        + '<td class="num">' + esc(numText(row.demandWan)) + '</td>'
+        + '<td class="num">' + esc(numText(row.actualWan)) + '</td>'
+        + '<td class="num">' + esc(numText(row.gapWan)) + '</td>'
+        + '<td class="num">' + rateTag(row) + '</td>'
+        + '<td class="num">' + esc(row.linkedReleaseCount) + ' 条 / ' + esc(row.allocationCount) + ' 登记</td>'
+        + '<td>' + (unmatchedN ? '<span class="tag is-serious">' + unmatchedN + ' 条</span>' : '<span class="tag is-ok">0</span>') + '</td>'
+        + '<td><span class="tag">展开</span></td>'
+        + '</tr>');
+      if (expanded) html.push(satisfactionDetailHtml(row, colspan));
+    });
+    tbody.innerHTML = html.join('');
+  }
+
+  function renderUnmatched() {
+    var tbody = el('unmatchedRows');
+    var s = state.satisfaction;
+    if (!s) { tbody.innerHTML = emptyRow(6, '数据还在加载…'); return; }
+    if (!s.unmatched.length) {
+      tbody.innerHTML = emptyRow(6, '都能对上，没有需要单独核对的记录。');
+      return;
+    }
+    tbody.innerHTML = s.unmatched.map(function (u) {
+      var who = u.kind === 'release'
+        ? esc(u.reservoirName) + '（时段出库未登记给谁）'
+        : esc(u.userName) + ' ' + esc(u.no) + '（' + esc(u.period) + '）';
+      var reason = u.kind === 'release' ? esc(u.reason) : esc((u.reasons || []).join('；'));
+      var typeTag = u.kind === 'release'
+        ? '<span class="tag is-warn">有出库、没登记</span>'
+        : '<span class="tag is-serious">登记了、对不到出库</span>';
+      var action = u.kind === 'release'
+        ? '<button type="button" class="btn btn-sm" data-action="fill-allocation" data-release-id="' + esc(u.releaseId) + '" data-date="' + esc(u.date) + '">去补登记</button>'
+        : '<button type="button" class="btn btn-sm btn-danger" data-action="delete-allocation" data-id="' + esc(u.allocationId) + '">删除这条登记</button>';
+      return '<tr><td>' + typeTag + '</td>'
+        + '<td>' + esc(u.date) + '</td>'
+        + '<td>' + who + '</td>'
+        + '<td class="num">' + esc(numText(u.flow)) + '</td>'
+        + '<td class="num">' + esc(numText(u.volumeWan)) + '</td>'
+        + '<td>' + reason + ' ' + action + '</td></tr>';
+    }).join('');
+  }
+
+  function renderWaterUsers() {
+    var tbody = el('userRows');
+    var users = state.waterUsers || [];
+    if (!users.length) { tbody.innerHTML = emptyRow(6, '还没有用水户，先在上方登记。'); return; }
+    tbody.innerHTML = users.slice().sort(function (a, b) { return a.code < b.code ? -1 : 1; }).map(function (u) {
+      return '<tr style="cursor:default"><td>' + esc(u.code) + '</td>'
+        + '<td>' + esc(u.name) + '</td>'
+        + '<td>' + esc(dash(u.contact)) + '</td>'
+        + '<td>' + esc(dash(u.canal)) + '</td>'
+        + '<td class="num">' + esc(numText(u.demandCount)) + '</td>'
+        + '<td>' + esc(dash(u.latestWindowEnd)) + '</td></tr>';
+    }).join('');
+  }
+
+  function renderSatisfaction() {
+    renderImpactBanner();
+    renderSatisfactionCards();
+    renderPriority();
+    renderSatisfactionRows();
+    renderUnmatched();
+    renderWaterUsers();
+    fillSatisfactionSelects();
+  }
+
+  function fillSatisfactionSelects() {
+    var userSelect = el('demandFormUser');
+    if (userSelect) {
+      userSelect.innerHTML = satisfactionUserOptions(userSelect.value || '');
+    }
+    var demandSelect = el('allocationDemand');
+    if (demandSelect && state.satisfaction) {
+      var current = demandSelect.value;
+      demandSelect.innerHTML = optionsHtml(state.satisfaction.rows.map(function (r) {
+        return { value: r.demandId, label: r.no + ' ' + r.userName + '（' + r.reservoirName + ' ' + r.period + '）' };
+      }), current, '请选择计划');
+    }
+    var submitted = el('demandSubmittedAt');
+    if (submitted && !submitted.value) submitted.value = todayIso();
+  }
+
+  /* 选了计划或日期之后，把该库当天的出库记录带进出库记录下拉 */
+  async function refreshAllocationReleases(preserveSelection) {
+    var demandSelect = el('allocationDemand');
+    var dateInput = el('allocationDate');
+    var releaseSelect = el('allocationRelease');
+    var flowInput = qs('#allocationForm [name="flow"]');
+    var hint = el('allocationHint');
+    if (!demandSelect || !dateInput || !releaseSelect) return;
+    var demandId = demandSelect.value;
+    var date = dateInput.value;
+    var row = demandId && state.satisfaction ? state.satisfaction.rows.filter(function (r) { return r.demandId === demandId; })[0] : null;
+    if (!row || !date) {
+      releaseSelect.innerHTML = '<option value="">对不到（仅纸上登记，需手填流量）</option>';
+      state.allocationReleases = [];
+      if (hint) hint.textContent = '';
+      return;
+    }
+    if (date < row.windowStart || date > row.windowEnd) {
+      if (hint) hint.textContent = '日期不在该计划时段 ' + row.period + ' 之内，保存会被接口退回。';
+    } else if (hint) {
+      hint.textContent = '';
+    }
+    try {
+      var releases = await api('GET', '/api/flows' + queryString({ kind: 'release', reservoirId: row.reservoirId, from: date, to: date }));
+      state.allocationReleases = releases;
+      var options = ['<option value="">对不到（仅纸上登记，需手填流量）</option>'];
+      releases.forEach(function (r) {
+        options.push('<option value="' + esc(r.id) + '"' + (preserveSelection && r.id === releaseSelect.value ? ' selected' : '') + '>'
+          + esc(r.date + ' 出库 ' + r.flow + ' m³/s（' + r.type + '，' + r.id + '）') + '</option>');
+      });
+      releaseSelect.innerHTML = options.join('');
+      if (releases.length === 1) releaseSelect.value = releases[0].id;
+      if (flowInput) {
+        var picked = releases.filter(function (r) { return r.id === releaseSelect.value; })[0];
+        flowInput.value = picked ? picked.flow : '';
+      }
+      if (hint && !hint.textContent) hint.textContent = releases.length
+        ? '当天该库有 ' + releases.length + ' 条出库记录，选一条对应上；确实对不上时保留「对不到」并手填纸上流量。'
+        : '当天该库没有出库记录，这条只能按纸上登记手填流量，会列入「对不上」。';
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  /* 调整/登记成功后：带上影响面重算，横幅写清影响哪些时段与用水户 */
+  async function applySatisfactionChange(promise) {
+    try {
+      var result = await promise;
+      state.lastImpact = result.impact || null;
+      await loadSatisfaction();
+      renderSatisfaction();
+      toast('已按调整后的数据重算满足率与排序');
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  async function submitDemand(form) {
+    var errorBox = el('demandFormError');
+    clearFormError(errorBox);
+    var values = formValues(form);
+    try {
+      await applySatisfactionChange(api('POST', '/api/demands', {
+        userId: values.userId,
+        reservoirId: values.reservoirId,
+        windowStart: values.windowStart,
+        windowEnd: values.windowEnd,
+        demandWan: Number(values.demandWan),
+        purpose: values.purpose,
+        reporter: values.reporter,
+        submittedAt: values.submittedAt,
+        remark: values.remark
+      }));
+      form.reset();
+      fillSatisfactionSelects();
+      var submitted = el('demandSubmittedAt');
+      if (submitted) submitted.value = todayIso();
+    } catch (err) {
+      showError(err, errorBox);
+    }
+  }
+
+  async function submitAllocation(form) {
+    var errorBox = el('allocationFormError');
+    clearFormError(errorBox);
+    var values = formValues(form);
+    if (!values.demandId) {
+      showNotice('请先选择对应计划', true);
+      return;
+    }
+    var body = {
+      demandId: values.demandId,
+      date: values.date,
+      releaseId: values.releaseId || '',
+      flow: values.flow === '' ? null : Number(values.flow),
+      recorder: values.recorder,
+      remark: values.remark
+    };
+    try {
+      await applySatisfactionChange(api('POST', '/api/allocations', body));
+      form.reset();
+      state.allocationReleases = [];
+      fillSatisfactionSelects();
+    } catch (err) {
+      showError(err, errorBox);
+    }
+  }
+
+  async function submitUser(form) {
+    var errorBox = el('userFormError');
+    clearFormError(errorBox);
+    var values = formValues(form);
+    try {
+      await api('POST', '/api/water-users', { name: values.name, contact: values.contact, canal: values.canal });
+      toast('用水户已登记');
+      form.reset();
+      state.waterUsers = await api('GET', '/api/water-users');
+      renderWaterUsers();
+      renderSidebar();
+      fillSatisfactionSelects();
+    } catch (err) {
+      showError(err, errorBox);
+    }
+  }
+
+  /* 从「对不上」清单点「补登记」时，把出库记录带回登记表单并自动选好计划/日期 */
+  async function fillAllocationForm(ds) {
+    var demandSelect = el('allocationDemand');
+    var dateInput = el('allocationDate');
+    if (!demandSelect || !dateInput) return;
+    var demandId = ds.demandId || '';
+    if (!demandId && state.satisfaction && ds.releaseId) {
+      var picked = state.satisfaction.rows.filter(function (r) {
+        return ds.date >= r.windowStart && ds.date <= r.windowEnd && r.unlinkedReleases.some(function (x) { return x.releaseId === ds.releaseId; });
+      })[0];
+      if (picked) demandId = picked.demandId;
+    }
+    if (demandId) demandSelect.value = demandId;
+    dateInput.value = ds.date || '';
+    await refreshAllocationReleases(true);
+    var releaseSelect = el('allocationRelease');
+    if (releaseSelect && ds.releaseId) releaseSelect.value = ds.releaseId;
+    var flowInput = qs('#allocationForm [name="flow"]');
+    var matched = (state.allocationReleases || []).filter(function (r) { return r.id === (ds.releaseId || releaseSelect.value); })[0];
+    if (flowInput && matched) flowInput.value = matched.flow;
+    el('allocationForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   /* ================= 设置弹层 ================= */
 
   function openSettingsModal() {
@@ -1062,6 +1533,50 @@
     if (action === 'toggle-level') { toggleRow('level', btn.dataset.id); renderWater(); return; }
     if (action === 'toggle-flow') { toggleRow('flow', btn.dataset.kind + ':' + btn.dataset.id); renderWater(); return; }
     if (action === 'toggle-order') { toggleRow('order', btn.dataset.id); renderOrders(); return; }
+    if (action === 'toggle-satisfaction') {
+      state.expanded.satisfaction = state.expanded.satisfaction === btn.dataset.id ? '' : btn.dataset.id;
+      renderSatisfactionRows();
+      return;
+    }
+    if (action === 'locate-demand') {
+      state.expanded.satisfaction = btn.dataset.id;
+      renderSatisfactionRows();
+      var anchor = qs('.satisfaction-row[data-id="' + btn.dataset.id + '"]');
+      if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (action === 'fill-allocation') {
+      fillAllocationForm(btn.dataset);
+      return;
+    }
+    if (action === 'save-demand') {
+      var dBox = btn.closest('.detail');
+      var dBody = {};
+      qsa('[data-demand-field]', dBox).forEach(function (node) {
+        var field = node.dataset.demandField;
+        if (field === 'demandWan') dBody[field] = Number(node.value);
+        else dBody[field] = node.value;
+      });
+      try {
+        await applySatisfactionChange(api('PATCH', '/api/demands/' + encodeURIComponent(btn.dataset.id), dBody));
+      } catch (err) { showError(err, qs('[data-role="demand-error"]', dBox)); }
+      return;
+    }
+    if (action === 'delete-demand') {
+      if (!armDelete(btn)) return;
+      try {
+        await applySatisfactionChange(api('DELETE', '/api/demands/' + encodeURIComponent(btn.dataset.id)));
+        state.expanded.satisfaction = '';
+      } catch (err) { showError(err); }
+      return;
+    }
+    if (action === 'delete-allocation') {
+      if (!armDelete(btn)) return;
+      try {
+        await applySatisfactionChange(api('DELETE', '/api/allocations/' + encodeURIComponent(btn.dataset.id)));
+      } catch (err) { showError(err); }
+      return;
+    }
 
     if (action === 'delete-level') {
       if (!armDelete(btn)) return;
@@ -1203,8 +1718,7 @@
       if (scope === 'water') updateWaterCounts();
       else renderSidebar();
       return;
-    }
-    if (action === 'notice-close') { hideNotice(); }
+    }    if (action === 'notice-close') { hideNotice(); }
   }
 
   function bindEvents() {
@@ -1244,7 +1758,25 @@
       }
       if (scope === 'orders') { reloadView('orders'); return; }
       if (scope === 'water') { reloadView('water').then(updateWaterCounts); return; }
+      if (scope === 'satisfaction') { reloadView('satisfaction'); return; }
       if (scope === 'balance') { renderBalance(); }
+    });
+
+    document.addEventListener('change', function (event) {
+      if (event.target.closest('#allocationDemand')) {
+        refreshAllocationReleases(false);
+        return;
+      }
+      if (event.target.closest('#allocationDate')) {
+        refreshAllocationReleases(true);
+        return;
+      }
+      if (event.target.closest('#allocationRelease')) {
+        var picked = (state.allocationReleases || []).filter(function (r) { return r.id === event.target.value; })[0];
+        var flowInput = qs('#allocationForm [name="flow"]');
+        if (flowInput) flowInput.value = picked ? picked.flow : '';
+        return;
+      }
     });
 
     document.addEventListener('input', function (event) {
@@ -1269,13 +1801,16 @@
     el('releaseForm').addEventListener('submit', function (event) { event.preventDefault(); submitFlow(event.target, 'release'); });
     el('orderForm').addEventListener('submit', function (event) { event.preventDefault(); submitOrder(event.target); });
     el('balanceForm').addEventListener('submit', function (event) { event.preventDefault(); submitBalance(event.target); });
+    el('demandForm').addEventListener('submit', function (event) { event.preventDefault(); submitDemand(event.target); });
+    el('allocationForm').addEventListener('submit', function (event) { event.preventDefault(); submitAllocation(event.target); });
+    el('userForm').addEventListener('submit', function (event) { event.preventDefault(); submitUser(event.target); });
   }
 
   /* ================= 下拉与默认值 ================= */
 
   function fillReservoirSelects() {
     var list = state.reservoirs || [];
-    ['levelFormReservoir', 'inflowFormReservoir', 'releaseFormReservoir', 'orderFormReservoir', 'balanceReservoir'].forEach(function (id) {
+    ['levelFormReservoir', 'inflowFormReservoir', 'releaseFormReservoir', 'orderFormReservoir', 'balanceReservoir', 'demandFormReservoir'].forEach(function (id) {
       var node = el(id);
       if (!node) return;
       var current = node.value;
@@ -1330,6 +1865,8 @@
       state.flows.inflow = await api('GET', '/api/flows?kind=inflow');
       state.flows.release = await api('GET', '/api/flows?kind=release');
       state.orders = await api('GET', '/api/orders');
+      state.waterUsers = await api('GET', '/api/water-users');
+      state.satisfaction = await api('GET', '/api/satisfaction');
     } catch (err) {
       showError(err);
     }
@@ -1342,6 +1879,7 @@
     renderWater();
     renderOrders();
     renderBalance();
+    renderSatisfaction();
   }
 
   if (document.readyState === 'loading') {
